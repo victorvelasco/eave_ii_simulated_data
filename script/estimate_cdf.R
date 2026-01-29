@@ -1,4 +1,3 @@
-set.seed(1)
 
 m <- 1e6 # Sample size for estimating the CDF
 
@@ -7,13 +6,13 @@ fhat <- list() # List to store empirical CDFs
 for (tmt_allocation in a_k_values) {
   # Step 1. For j=1,...,m, simulate B_j ~ p(B_j). Set k = 0.
   b <- demographics[sample(1:nrow(demographics), size = m, replace = TRUE, prob = demographics$n), -ncol(demographics)]
+  
+  b <- b[, c("sex", "age_group")]
   rownames(b) <- NULL
   # Categorical and ordinal encoding of demographic covariates, B
   b_coded <- cbind(
-    encode_binary(b$Sex, name = "Sex"),
-    encode_ordinal(b$AgeGroup, name = "AgeGroup"),
-    encode_ordinal(b$SCSIMD5, name = "SCSIMD5"),
-    encode_ordinal(b$NumComorbidities, name = "NumComorbidities")
+    encode_binary(b$sex, name = "Sex"),
+    encode_ordinal(b$age_group, name = "AgeGroup")
   )
   for (k in 0:nchar(tmt_allocation)) {
     cat("Tmt allocation = ", tmt_allocation, " k = ", k, "\n")
@@ -41,7 +40,10 @@ for (tmt_allocation in a_k_values) {
     u_y <- pnorm(z_y)
     
     # Step 9. Compute Y_{k+1}
-    failed <- u_y < expit(sum(as.vector(c(1, as.numeric(strsplit(substr(tmt_allocation, 1, k+1), "")[[1]]))) * betas[[k+1]]))
+    #### failed <- u_y < expit(sum(as.vector(c(1, as.numeric(strsplit(substr(tmt_allocation, 1, k+1), "")[[1]]))) * betas[[outcome]][[k+1]]))
+    failed <- u_y < expit(
+      sum(as.vector(c(1, sum(as.numeric(strsplit(substr(tmt_allocation, 1, k+1), "")[[1]])))) * betas[[outcome]][[k+1]])
+    )
     
     # Step 10. Replace failed individuals with individuals that have survived
     random_replacements <- sample(which(!failed), size = sum(failed), replace = TRUE)

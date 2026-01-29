@@ -1,5 +1,5 @@
-# Initialise matrices to store variables 
-N <- 1e6
+# Initialise matrices to store variables
+N <- 1e5
 a <- matrix(NA, nrow = N, ncol = K+1); colnames(a) <- paste0("A", 0:K)
 y <- cbind(
   matrix(1,  nrow = N, ncol = 1),
@@ -8,15 +8,14 @@ y <- cbind(
 
 # Step 1. Sample B ~ p(B). Set k = 0
 b <- demographics[sample(1:nrow(demographics), size = N, replace = TRUE, prob = demographics$n), -ncol(demographics)]
+b <- b[, c("sex", "age_group")]
 # Variables age, SCSIMD5 and NumComorbidities are coded as ordinal predictors
 b_coded <- cbind(
-  encode_binary(b$Sex, name = "Sex"),
-  encode_ordinal(b$AgeGroup, name = "AgeGroup"),
-  encode_ordinal(b$SCSIMD5, name = "SCSIMD5"),
-  encode_ordinal(b$NumComorbidities, name = "NumComorbidities")
+  encode_binary(b$sex, name = "Sex"),
+  encode_ordinal(b$age_group, name = "AgeGroup")
 )
 
-# In the first iteration, all subjects are alive (Y0 = 1 for every subject) 
+# In the first iteration, all subjects are alive (Y0 = 1 for every subject)
 failed <- rep(FALSE, N)
 survived <- rep(TRUE, N)
 failures <- rep(K+1, N)
@@ -26,16 +25,25 @@ for (k in 0:K) {
   # (Skip) Step 2. Sample time-varying covariates
   # Step 3. Sample A_k ~ p(A_k | B, \bar{A}_{k-1}, Y_k = 1)
   if (k == 0) {
+    #### eligible <- survived
+    #### Neligible <- sum(eligible)
     linpred.a <- as.vector(cbind(rep(1, Nsurvived), b_coded[which(survived), ]) %*% gammas[[k+1]])
   } else {
-    linpred.a <- as.vector(cbind(rep(1, Nsurvived), b_coded[which(survived), ], a[which(survived), 1:k]) %*% gammas[[k+1]])
+    #### eligible <- survived & rowSums(a[, 1:(k+1)], na.rm = TRUE) == 0
+    #### Neligible <- sum(eligible)
+    #### linpred.a <- as.vector(cbind(rep(1, Neligible), b_coded[which(eligible), ]) %*% gammas[[k+1]])
+    linpred.a <- as.vector(cbind(rep(1, Neligible), b_coded[which(survived), ]) %*% gammas[[k+1]])
   }
+  #### a[eligible, k+1] <- as.integer(runif(Neligible) < expit(linpred.a))
   a[survived, k+1] <- as.integer(runif(Nsurvived) < expit(linpred.a))
+  #### if (any(survived & !eligible)) {
+  ####   a[survived & !eligible, k+1] <- 0
+  #### }
   a[!survived, k+1] <- NA
-  
+
   # Step 4. Calculate H_k
   h <- as.vector(b_coded[survived, ] %*% thetas)
-  
+
   # Step 5. Calculate U_H, Z_H. Use risk score as in Appendix H
   if (k == 0) {
     a_bar <- as.character(a[,1]) # This is the history of allocated treatments, to date
@@ -51,44 +59,23 @@ for (k in 0:K) {
   }
   u_h <- runif(Nsurvived, u_h_min, u_h_max)
   z_h <- qnorm(u_h)
-  
+
   # Step 6. Sample Z_Y  and calculate U_Y
   z_y <- rnorm(Nsurvived, rho[k+1]*z_h, sqrt(1-rho[k+1]^2))
   u_y <- pnorm(z_y)
-  
+
   # Step 7. Compute Y_{k+1}
   if (k == 0) {
-    linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), a[, 1]) %*% betas[[1]])
+    linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), a[, 1]) %*% betas[[outcome]][[1]])
+    #### linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), a[, 1]) %*% betas[[1]])
   } else {
-    linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), a[survived, 1:(k+1)]) %*% betas[[k+1]])
+    linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), a[survived, 1:(k+1)]) %*% betas[[outcome]][[k+1]])
+    #### linpred.y <- as.vector(cbind(matrix(1, nrow = Nsurvived, ncol = 1), rowSums(a[survived, 1:(k+1)])) %*% betas[[k+1]])
   }
   failed[failed == FALSE] <- u_y < expit(linpred.y)
   y[, k+2] <- ifelse(failed, 0, 1)
   survived <- !failed
   Nsurvived <- sum(survived)
-  
+
   # Step 8. Set k = k + 1 and return to Step 2
-}
-
-failure_times <- rowSums(y)
-# First compute weights
-w <- matrix(1, N, K+1)
-
-model.fits <- list()
-for (k in 1:(K+1)) {
-  if (k == 1) {
-    fit.numer <- glm(a[, 1] ~ 1, family = binomial)
-    fit.denom <- glm(a[, 1] ~ b_coded, family = binomial)
-  } else {
-    fit.numer <- glm(a[, k] ~ a[,(1:(k-1))], family = binomial, subset = which(failure_times>=k))
-    fit.denom <- glm(a[, k] ~ a[,(1:(k-1))] + b_coded, family = binomial, subset = which(failure_times>=k))
-  }
-  
-  phat.denom <- a[failure_times>=k, k] * fitted(fit.denom) + (1-a[failure_times>=k, k]) * (1- fitted(fit.denom))
-  phat.numer <- a[failure_times>=k, k] * fitted(fit.numer) + (1-a[failure_times>=k, k]) * (1- fitted(fit.numer))
-  if (k == 1) {
-    w[, k] <- phat.numer / phat.denom
-  } else {
-    w[failure_times>=k, k] <- w[failure_times>=k,k-1] * phat.numer / phat.denom
-  }
 }

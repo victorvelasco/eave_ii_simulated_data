@@ -1,0 +1,90 @@
+---
+title: "Simulation Results"
+output:
+  html_document:
+    df_print: default
+  pdf_document:
+    latex_engine: pdflatex
+fontsize: 11pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, results = 'asis')
+```
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(knitr)
+  library(kableExtra)
+})
+```
+
+```{r, error=FALSE, warning=FALSE, message=FALSE}
+# Expect an object called `results` in the environment or read it here.
+# Example:
+# results <- read.csv("results.csv", check.names = FALSE)
+
+source("main.R")
+stopifnot(exists("results"))
+
+# Round as requested
+results <- results %>%
+  mutate(
+    rho = round(rho, 1),
+    across(
+      c(`True value`, `Estimate (unweighted)`, `SD (unweighted)`,
+        `Estimate (weighted)`, `SD (weighted)`),
+      ~ round(.x, 2)
+    )
+  )
+```
+
+```{r helper}
+make_table <- function(df_outcome, outcome_name) {
+  df <- df_outcome %>%
+    select(-outcome)  # drop leftmost outcome column
+  
+  tab <- df %>%
+    kable(
+      format = if (knitr::is_latex_output()) "latex" else "html",
+      booktabs = knitr::is_latex_output(),
+      longtable = knitr::is_latex_output(),
+      caption = paste("Simulation results for", outcome_name),
+      align = c("l", "r", "r", "r", "r", "r", "r")
+    ) %>%
+    kable_styling(
+      latex_options = if (knitr::is_latex_output()) c("hold_position", "repeat_header") else NULL,
+      font_size = 9
+    )
+  
+  # IMPORTANT: explicitly print so it appears in the document
+  print(tab)
+  invisible(NULL)
+}
+```
+
+## Thrombocytopenia
+```{r}
+make_table(filter(results, outcome == "Thrombocytopenia"), "Thrombocytopenia")
+```
+
+## ITP
+```{r}
+make_table(filter(results, outcome == "ITP"), "ITP")
+```
+
+## Venous
+```{r}
+make_table(filter(results, outcome == "Venous"), "Venous")
+```
+
+## Arterial
+```{r}
+make_table(filter(results, outcome == "Arterial"), "Arterial")
+```
+
+## Hemorrhagic
+```{r}
+make_table(filter(results, outcome == "Hemorrhagic"), "Hemorrhagic")
+```
