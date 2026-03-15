@@ -80,9 +80,43 @@ a_k_values <- c("0", "1")
 nsim <- 100
 
 set.seed(1)
-results_list <- list()
 outcomes <- names(betas)
-i <- 1
+models <- data.frame(outcome = rep(outcomes, each = length(rhos)), rho = rep(1:length(rhos), length(outcomes)))
+
+Sys.time()
+results_list <- mclapply(
+  1:nrow(models), 
+  function(r) {
+    outcome <- models[r, "outcome"]
+    l <- models[r, "rho"]
+    rho <- rep(rhos[l], K+1)
+    rlist <- list()
+    for (isim in 1:nsim) {
+      cat("isim = ", isim, "\n")
+      source("script/estimate_cdf.R")
+      source("script/simulate_data.R")
+      source("script/results.R")
+      rlist[[isim]] <- cbind(outcome = outcome, rho = rhos[l], isim = isim, param.estimates)
+      rlist[[isim]] <- as.data.frame(rlist[[isim]])
+    }
+    
+    return(do.call(rbind, rlist))
+  },
+  mc.cores = 12
+)
+results <- do.call(rbind, results_list)
+results <- cbind(parameter = rep(c("a_0", "a_1"), nrow(results)/2), results)
+rownames(results)<-NULL
+results[, 3] <- as.numeric(results[, 3])
+results[, 4] <- as.numeric(results[, 4])
+results[, 5] <- as.numeric(results[, 5])
+results[, 6] <- as.numeric(results[, 6])
+results[, 7] <- as.numeric(results[, 7])
+results[, 8] <- as.numeric(results[, 8])
+results[, 9] <- as.numeric(results[, 9])
+Sys.time()
+saveRDS(results, "results.RDS")
+source("script/create_tables.R")
 
 outcomes <- names(betas)
 for (outcome in outcomes) {

@@ -1,5 +1,5 @@
 # Initialise matrices to store variables
-N <- 1e5
+N <- 1e6
 a <- matrix(NA, nrow = N, ncol = K+1); colnames(a) <- paste0("A", 0:K)
 y <- cbind(
   matrix(1,  nrow = N, ncol = 1),
