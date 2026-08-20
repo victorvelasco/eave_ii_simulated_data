@@ -93,6 +93,7 @@ colnames(param.estimates)[2] <- "Estimate (unweighted)"
 colnames(param.estimates)[3] <- "SD (unweighted)"
 colnames(param.estimates)[4] <- "Estimate (weighted)"
 colnames(param.estimates)[5] <- "SD (weighted)"
+dir.create(paste0("output/", outcome, "/", l), recursive = TRUE, showWarnings = FALSE)
 write_csv(as.data.frame(param.estimates), paste0("output/", outcome, "/", l, "/results.csv"))
 ###   }
 ### }
